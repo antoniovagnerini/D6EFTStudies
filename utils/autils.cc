@@ -366,7 +366,9 @@ bool largerPt (const pair <int, TLorentzVector>& i, const pair <int, TLorentzVec
 double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCuts)
 {
   int events = 0 ;
-   
+
+  int nsel[10] = { };  
+
   //PG loop over input events
   while (reader.readEvent ()) 
     {
@@ -472,7 +474,11 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
       float ptmumu  = -1. ;
       float m4l     = -1. ;
       float mll     = -1.;
+      float mee     = -1.;
+      float mmumu   = -1.;
       float ptll    = -1.;
+      float ptemuplus    = -1.;
+      float ptemuminus   = -1.;
 
       //cout << ">>> FillNtuple:: this is the jets' size ::  " << v_f_jets.size() << endl;
       //cout << "                 these are from quarks ::  " << v_f_quarks.size() << endl;
@@ -533,6 +539,8 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
               exit (1) ;
             }
 
+	  ++nsel[0];
+
 	  //Jets selection
 	  vector<TLorentzVector> v_goodJets ;
 	  for (int j = 0 ; j < v_f_jets.size () ; j++)
@@ -545,18 +553,21 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
           if (ptj1 < 30 || fabs(etaj1) > 4.7) continue ;
           if (ptj2 < 30 || fabs(etaj2) > 4.7) continue ;
 	  //          if (ME.Pt () < 40) continue ; NO METselection in ZZ
-
-	  if ( fabs(v_f_jets.at (0).Pt()- v_goodJets[0].Pt()) >0.01) cout << "different j0 than good j0" << endl;
-	  if ( fabs(v_f_jets.at (1).Pt()- v_goodJets[1].Pt()) >0.01) cout << "different j1 than good j1" << endl;
+	  ++nsel[1];
 
 	  //VBS ZZ enriched selection LOOSE WP
           if (fabs (v_f_jets.at (0).Eta () - v_f_jets.at (1).Eta ()) < 2.4 ) continue ; 
-          if (mjj < 400) continue ; 
+          if (mjj < 400) continue ;
+  	  ++nsel[2];
 
+	  
 	  //Lepton selection
 	  vector<TLorentzVector> v_goodMuons ;	  
 	  vector<TLorentzVector> v_goodElectrons ;	 
-	  bool pTl1min = false;
+	  vector<int> v_leptonPlus;  // indices +ly charged leps
+	  vector<int> v_leptonMinus; // indices -ly charged leps
+
+	  bool pTl1min = false; 
 	  int  pTl2min = 0;
   
 	  int sumtype_e=0;
@@ -574,8 +585,8 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 		{
 		  if ( abs(type) == 11 || abs(type) == 13 ) 
 		    {
-		      if (v_l.Pt() > 20) pTl1min = true; //ptmin 20 at least single lep in event
-		      if (v_l.Pt() > 10) pTl2min +=1;    //ptmin 10 at least two    leps in event
+		      if (v_l.Pt() > 20) pTl1min = true; //ptmin 20 at least one lep in event
+		      if (v_l.Pt() > 10) pTl2min +=1;    //ptmin 10 at least two leps in event
 
 		      //correct lepton pT if neighbouring photon - no FSR @LHE level
 		      /*      for (int y = 0 ; y < v_f_photons.size () ; y++)
@@ -587,12 +598,16 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
                           cout << events << "type = " << type <<"pT = "<< dummy << endl;
            		  cout << events << " photon pT = " << v_gamma.Pt() << "corrected lepton pT =" << v_l.Pt() << endl;
 			  } */
+
+		      if (type>0) v_leptonPlus.push_back(l);  
+		      else        v_leptonMinus.push_back(l); 
+
 		    }
 
 		  if ( abs(type) == 11 ) //electrons 
 		    {
 		      v_goodElectrons.push_back(v_l);
-		      sumtype_e+=type;
+		      sumtype_e+=type; 
 		      //cout<<"electron loop " << sumtype_e<<endl;
 		    }
 
@@ -605,6 +620,7 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 
 		}
 	    }
+	  	  
 
 	  //Leading(sub-) leptons selection
 	  //	  if (!pTl1min || pTl2min<2 ) continue;
@@ -612,6 +628,7 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 
 	  //Check pairwise OS electrons and muons 
 	  if ( sumtype_e != 0 || sumtype_m != 0 ) continue;
+	  ++nsel[3];
 
 	  //Jet-lepton separation
 	  for (int j = 0 ; j < v_goodJets.size () ; j++)
@@ -633,6 +650,8 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 		  //cout << "dR(j" <<j <<",mu"<<mu<<")="<< v_j.DeltaR(v_goodMuons.at(mu)) <<endl;
 		}
 	    }
+	  ++nsel[4];
+
 	  
 	  if (chan =="2e2mu")
 	    {
@@ -642,8 +661,10 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 	      TLorentzVector v_mm =     v_goodMuons[0]+    v_goodMuons[1];
   
 	      //mZ selection
+	      //   cout << "mee = " << v_ee.M() << " m_mm =" << v_mm.M()<<endl;
               if (v_ee.M() <60 || v_ee.M() >120) continue;
 	      if (v_mm.M() <60 || v_mm.M() >120) continue;
+	      ++nsel[5];
 
 	      //deltaR cuts
 	      /*  TLorentzVector v_e1  = v_goodElectrons[0] ;
@@ -658,8 +679,18 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 	      //Main variables ptZ and m4l
 	      ptee   = v_ee.Pt();
 	      ptmumu = v_mm.Pt();
+
+	      mee   = v_ee.M();
+	      mmumu = v_mm.M();
+
 	      ptZ    = fabs(massZ -v_ee.M()) < fabs(massZ -v_mm.M()) ? v_ee.Pt() : v_mm.Pt();
 	      m4l    = (v_goodElectrons[0]+v_goodElectrons[1]+v_goodMuons[0]+v_goodMuons[1]).M();
+
+	      ptemuplus  = ( v_f_leptons.at(v_leptonPlus[0]).second  + v_f_leptons.at(v_leptonPlus[1]).second ).Pt();
+	      ptemuminus = ( v_f_leptons.at(v_leptonMinus[0]).second + v_f_leptons.at(v_leptonMinus[1]).second ).Pt();
+
+	      //cout << "indices ++ = "<< v_leptonPlus[0] <<v_leptonPlus[1] << " pTemu++ = " << ptemuplus << endl;
+	      //cout << "indices -- = "<< v_leptonMinus[0]<<v_leptonMinus[1] << " pTemu-- = " << ptemuminus << endl;
 
 	      // cout << "fabs(massZ -m_ee) ="<< fabs(massZ -v_ee.M()) << " fabs(massZ -m_mm) ="<< fabs(massZ -v_mm.M()) << endl;
 	      // cout <<" m4l =" <<m4l<< " ptZ =" << ptZ <<" ptee ="<<v_ee.Pt() << " ptmumu =" << v_mm.Pt() << endl; 
@@ -667,7 +698,8 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 	  
 	  //m4l selection
 	  if(m4l < 180) continue ;
-
+	  ++nsel[6];
+	  
 	  //No Zeta* cuts in VBS ZZ analysis
           //if (fabs (zetaStar (v_f_jets.at (0).Eta (), v_f_jets.at (1).Eta (), v_f_leptons.at (0).second.Eta ())) > 0.75) continue ;
           //if (fabs (zetaStar (v_f_jets.at (0).Eta (), v_f_jets.at (1).Eta (), v_f_leptons.at (1).second.Eta ())) > 0.75) continue ;
@@ -679,7 +711,9 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
       
       Ntuple.setvalue ("mjj", mjj) ;
       Ntuple.setvalue ("mll", mll) ; 
-     
+      Ntuple.setvalue ("mee", mee) ; 
+      Ntuple.setvalue ("mmumu", mmumu) ;
+
       Ntuple.setvalue ("m4l", m4l) ;      
       Ntuple.setvalue ("ptZ", ptZ);
       Ntuple.setvalue ("ptee", ptee);
@@ -716,6 +750,8 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
 
       Ntuple.setvalue ("met", ME.Pt ()) ;
       Ntuple.setvalue ("ptll", ptll ) ;
+      Ntuple.setvalue ("ptemuplus" , ptemuplus  ) ;
+      Ntuple.setvalue ("ptemuminus", ptemuminus ) ;
 
       Ntuple.fill (eventWeight) ;
 
@@ -724,7 +760,32 @@ double fillNtuple (LHEF::Reader & reader, ntuple & Ntuple, int max, bool applyCu
           cout << max << " events reached, exiting" << endl ;
           break ;
         }
+
     } //PG loop over input events
+
+  //Print cutflow summary
+  double fracAbs[10];
+  double fracRel[10];
+  std::string cuts[10];
+ 
+  cuts[0] = "nJet and nLeptons";
+  cuts[1] = "Jet kinematics";
+  cuts[2] = "detajj and mjj sel";
+  cuts[3] = "Lepton kinematics";
+  cuts[4] = "Lepton-jet deltaR(l;j)";
+  cuts[5] = "mZ selection";
+  cuts[6] = "mZZ selection";
+  
+  printf ("%-23s  %10s  %10s  %10s \n", std::string("Cut flow").c_str(), std::string("# events").c_str(), std::string("absolute").c_str(), std::string("relative").c_str() ); 
+  for ( int i = 0; i < 7; ++i ) 
+    {
+      fracAbs[i] = double(nsel[i])/nsel[0];
+      if ( i>0 )
+	fracRel[i] = double(nsel[i])/nsel[i-1];
+      else
+	fracRel[i] = fracAbs[i];
+      printf ("%-23s  %10d  %10.3f  %10.3f \n", cuts[i].c_str(), nsel[i], fracAbs[i], fracRel[i] ); 
+    }
 
   return events ;
 }

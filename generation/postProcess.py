@@ -24,10 +24,12 @@ usual_errors.append ('stty: standard input: Inappropriate ioctl for device')
 
 def readCondorReport (path):
     lista = glob.glob (path+ '/*.log')
+#    print (lista)
     if len (lista) > 1:
         print ('too many log files, exiting\n')
         sys.exit (1)
     filename = lista[0]
+ #   print (filename)
     normal = 0
     endcodes = []
     jobID = '-1'
@@ -148,6 +150,7 @@ def findXSwE (filename):
             if 'Cross-section' in line:
                 XSline = line
                 counter = counter + 1
+    print filename
     crossSection = float (XSline.split ()[2])
     crossSectionError = float (XSline.split ()[4])
     numberOfEvents = int (Nline.split ()[4])
@@ -168,9 +171,19 @@ def calcTotXS (singleGenInfoList):
 
     XS = sum (x / (e*e) for x, e, n in singleGenInfoList)
     sumW = sum (1. / (e*e) for x, e, n in singleGenInfoList)
+    print singleGenInfoList
+
+
+    #if not sumW < 0.0001:
+    print (XS)
+    print (sumW)
+
     XS = XS / sumW
     XSe = sqrt (1. / sumW)
-
+   # else:
+   #     raise ZeroDivisionError
+   # else:
+   #     print('SM case or sumW equal to zero replacing XS by known SM value')
     return [XS, XSe]
 
 
@@ -182,14 +195,18 @@ def makeNtupleProdCfg (basefolder,outfolder, LHEfiles, XS):
     processName = basefolder.split ('/')[-1]
     processName = processName.replace ('_results', '')
 
-    configFileName = basefolder + '/read_03_input.cfg'
+##    configFileName = basefolder + '/read_03_input.cfg'
+#    configFileName = 'gen/'+ processName + '_results/read_03_input.cfg'    
+    configFileName = processName + '_results/read_03_input.cfg'    
+
     outf = open (configFileName, 'w')
 
     outf.write ('[general]\n')
     outf.write ('samples = ' + processName + '\n')
-    outf.write ('variables = mjj, mll, ptj1, ptj2, etaj1, etaj2, phij1, phij2, ptl1, ptl2, etal1, etal2, met, ptll, deltaetajj, deltaphijj\n')
+    outf.write ('variables = mjj, mll, ptj1, ptj2, etaj1, etaj2, phij1, phij2, ptl1, ptl2, etal1, etal2, met, ptll, ptemuplus, ptemuminus, deltaetajj, deltaphijj, m4l, ptZ, ptee, ptmumu, mee, mmumu\n')
+#    outf.write ('variables = mjj, mll, ptj1, ptj2, etaj1, etaj2, phij1, phij2, ptl1, ptl2, etal1, etal2, met, ptll, deltaetajj, deltaphijj, m4l, ptZ, ptee, ptmumu, mee, mmumu\n')
     outf.write ('outputFile = '+ outfolder +'/ntuple_' + processName + '.root\n')
-    outf.write ('applycuts = false\n')
+    outf.write ('applycuts = true\n')
     outf.write ('\n')
     outf.write ('[' + processName + ']\n')
     outf.write ('XS = ' + XS + '\n')
@@ -269,7 +286,7 @@ if __name__ == '__main__':
 
     # FIXME use the numbers to discard failed jobs
     # FIXME make a histogram of the time duration of jobs
-    readCondorReport (basefolder)
+    #readCondorReport (basefolder)
 
     # collect the list of err files
     # ---- ---- ---- ---- ---- ---- ---- ---- ---- 
@@ -279,11 +296,14 @@ if __name__ == '__main__':
     print ('checking error reports...')
     files_err = getFilesList (basefolder, '*.err', [])
     issues = [errFileHasIssues (file) for file in files_err[0]]
-    discard = [ID for prob, ID, filename in issues if prob == True]
+#    discard = [ID for prob, ID, filename in issues if prob == True]
 
     print ('checking not finished runs...')
     files_run = getFilesList (basefolder, '*running', [])
-    discard = discard + [name.split ('_')[3] for name in files_run[1]]
+#    discard = discard + [name.split ('_')[3] for name in files_run[1]]
+    discard = [name.split ('_')[3] for name in files_run[1]]
+
+ #   discard = [] # WARNING added to get rid OF MULTIPLE IGNORES for cqq SAMPLES
 
     for elem in discard: print ('ignoring job ' + elem)
 
@@ -299,6 +319,9 @@ if __name__ == '__main__':
 
     print ('checking LHE files integrity...')
     files_lhe = getFilesList (basefolder, '*.lhe', discard)
+
+    #print (files_lhe)
+    
     closure = [checkClosure (file) for file in files_lhe[0]]
 
     allOK = 0
@@ -315,7 +338,7 @@ if __name__ == '__main__':
         print ('\nLIST OF LHE FILES:')
         print (','.join (files_lhe[0]))
         print ('\n')
-
+    
     # get number of events from LHE files
     # ---- ---- ---- ---- ---- ---- ---- ---- ---- 
     # this returns a list with the same elements found in findWSwE, but with different ordering
@@ -325,6 +348,8 @@ if __name__ == '__main__':
     # ---- ---- ---- ---- ---- ---- ---- ---- ---- 
 
     files_out = getFilesList (basefolder, '*.out', discard)
+#    print (files_out[0])
+
     XSs = [findXSwE (file) for file in files_out[0]]
 
     totXS = calcTotXS (XSs)
@@ -332,6 +357,7 @@ if __name__ == '__main__':
     print ('average XS: ' + str (1000. * totXS[0]) + ' +- ' + str (1000. * totXS[1]) + ' fb')
 
     outputfile = open (basefolder+'/postProcess.txt' ,'w')
+    ##outputfile = open ('postProcess.txt' ,'w')
     outputfile.write ('average XS: ' + str (totXS[0]) + ' +- ' + str (totXS[1]) + ' pb\n')
     outputfile.write ('average XS: ' + str (1000. * totXS[0]) + ' +- ' + str (1000. * totXS[1]) + ' fb\n\n')
     outputfile.write ('LHE files list:\n' + ','.join (files_lhe[0]) + '\n')
@@ -341,4 +367,5 @@ if __name__ == '__main__':
     # ---- ---- ---- ---- ---- ---- ---- ---- ---- 
 
     makeNtupleProdCfg (basefolder,outfolderNtuple, ','.join (files_lhe[0]), str (totXS[0]))
+    #makeNtupleProdCfg (basefolder,outfolderNtuple, ','.join (files_lhe[0]), "dummy")
 
